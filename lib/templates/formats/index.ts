@@ -20,8 +20,7 @@ export const formatInstructions: Record<string, FormatInstructions> = {
 - [Action item 2]
 - [Action item 3]
 
----
-*Generated with AI Report from conversation on [date]*`,
+---`,
     text: `EXECUTIVE SUMMARY: [TOPIC]
 
 OVERVIEW
@@ -40,8 +39,7 @@ NEXT STEPS
 * [Action item 2]
 * [Action item 3]
 
----
-Generated with AI Report`
+---`
   },
   detailed: {
     markdown: `# Detailed Analysis: [Topic]
@@ -69,8 +67,7 @@ Generated with AI Report`
 2. [Secondary recommendation]
 3. [Tertiary recommendation]
 
----
-*Generated with AI Report*`,
+---`,
     text: `DETAILED ANALYSIS: [TOPIC]
 
 BACKGROUND
@@ -92,8 +89,7 @@ RECOMMENDATIONS
 2. [Secondary]
 3. [Tertiary]
 
----
-Generated with AI Report`
+---`
   },
   meeting: {
     markdown: `# Meeting Notes: [Topic]
@@ -137,8 +133,7 @@ Task: [Task 1]
 Owner: [Name]
 Due: [Date]
 
----
-Generated with AI Report`
+---`
   },
   project: {
     markdown: `# [Project Name]
@@ -183,8 +178,7 @@ Generated with AI Report`
 - [Next milestone]
 - [Future plans]
 
----
-*Generated with AI Report*`,
+---`,
     text: `[PROJECT NAME]
 
 PROJECT OVERVIEW
@@ -227,8 +221,7 @@ STATUS AND NEXT STEPS
 * [Next milestone]
 * [Future plans]
 
----
-Generated with AI Report`
+---`
   },
   research: {
     markdown: `# Research Summary: [Topic]
@@ -249,8 +242,7 @@ Generated with AI Report`
 ## Future Research
 [Suggestions]
 
----
-*Generated with AI Report*`,
+---`,
     text: `RESEARCH: [TOPIC]
 
 ABSTRACT
@@ -269,8 +261,7 @@ IMPLICATIONS
 FUTURE RESEARCH
 [Suggestions]
 
----
-Generated with AI Report`
+---`
   },
   product: {
     markdown: `# Product Specification: [Name]
@@ -292,8 +283,7 @@ Generated with AI Report`
 - [Metric 1]
 - [Metric 2]
 
----
-*Generated with AI Report*`,
+---`,
     text: `PRODUCT: [NAME]
 
 OVERVIEW
@@ -313,7 +303,6 @@ METRICS
 * [Metric 1]
 * [Metric 2]
 
----
-Generated with AI Report`
+---`
   }
 }; 
