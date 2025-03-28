@@ -1,5 +1,7 @@
 import OpenAI from 'openai';
 import { type Conversation } from './conversation/types';
+import { templateManager } from './templates';
+import { type InputType, type ReportFormat } from './templates/types';
 
 // Create a function to get the API client
 function getAPIClient() {
@@ -26,29 +28,19 @@ function getAPIClient() {
 }
 
 export interface ReportOptions {
-  type: 'executive' | 'detailed' | 'actionable';
-  format?: 'markdown' | 'text';
+  type: 'executive' | 'detailed' | 'meeting' | 'project' | 'research' | 'product';
+  format?: ReportFormat;
+  inputType?: InputType;
 }
 
 export async function generateReport(conversation: Conversation, options: ReportOptions) {
-  const systemPrompt = `You are an expert at analyzing conversations and creating structured reports.
-Generate a ${options.type} report from the provided conversation.
-Format the output in ${options.format || 'markdown'}.
+  const template = templateManager.getTemplate(options.type);
+  if (!template) {
+    throw new Error(`Template ${options.type} not found`);
+  }
 
-For executive summary:
-- Focus on key decisions, outcomes, and main points
-- Keep it concise and business-oriented
-- Include actionable takeaways
-
-For detailed report:
-- Provide comprehensive analysis of the conversation
-- Break down by topics and themes
-- Include relevant quotes and context
-
-For actionable report:
-- Focus on action items and next steps
-- List responsibilities and deadlines if mentioned
-- Highlight decisions that require follow-up`;
+  const format = options.format || 'markdown';
+  const inputType = options.inputType || 'llm';
 
   try {
     const client = getAPIClient();
@@ -60,21 +52,45 @@ For actionable report:
       : 'gpt-3.5-turbo'; // Default to OpenAI
     
     console.log(`Generating report with model: ${model}`);
+
+    // Format the content based on input type
+    let content = '';
+    if (inputType === 'scratch' || inputType === 'file') {
+      content = conversation.messages[0].content;
+    } else {
+      content = conversation.messages.map(msg => `${msg.role.toUpperCase()}: ${msg.content}`).join('\n\n');
+    }
+
+    // Get the system prompt from the template manager
+    const systemPrompt = templateManager.getSystemPrompt(template, {
+      inputType,
+      format,
+      content,
+      title: conversation.title
+    });
     
     const completion = await client.chat.completions.create({
       model: model,
       messages: [
         { role: "system", content: systemPrompt },
-        { role: "user", content: `Title: ${conversation.title || 'Untitled Conversation'}
-
-Conversation:
-${conversation.messages.map(msg => `${msg.role.toUpperCase()}: ${msg.content}`).join('\n\n')}` }
+        { role: "user", content: `${inputType === 'llm' ? 'Title: ' + (conversation.title || 'Untitled Conversation') + '\n\n' : ''}Content:\n${content}` }
       ],
       temperature: 0.7,
       max_tokens: 2000,
     });
 
-    return completion.choices[0].message.content;
+    // Get the report content and append the date
+    let reportContent = completion.choices[0].message.content || '';
+    const currentDate = new Date().toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
+    
+    // Add a line break and the date at the end
+    reportContent += `\n\nGenerated on ${currentDate}`;
+
+    return reportContent;
   } catch (error) {
     console.error('Error generating report:', error);
     
@@ -96,26 +112,6 @@ ${conversation.messages.map(msg => `${msg.role.toUpperCase()}: ${msg.content}`).
 }
 
 export async function validateApiKey() {
-  try {
-    // Check if the API key is configured
-    if (!process.env.OPENAI_API_KEY) {
-      console.error('API key is not set in environment variables');
-      return false;
-    }
-    
-    // Test the API key with a simple call
-    const client = getAPIClient();
-    
-    // For OpenRouter, just return true as we can't easily test
-    if (process.env.OPENAI_API_KEY.startsWith('sk-or-')) {
-      return true;
-    }
-    
-    // For OpenAI, test with a models list call
-    await client.models.list();
-    return true;
-  } catch (error) {
-    console.error('Error validating API key:', error);
-    return false;
-  }
+  const apiKey = process.env.OPENAI_API_KEY;
+  return !!apiKey;
 }

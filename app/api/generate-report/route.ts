@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server";
 import { generateReport, validateApiKey } from "@/lib/openai";
 import { fetchAndParseConversation, validateConversationUrl } from "@/lib/conversation-parser";
 import { type Conversation } from "@/lib/conversation/types";
+import { templateManager } from "@/lib/templates";
 
 // Sample report for testing without API calls
 const SAMPLE_REPORT = `# Executive Summary: AI and Machine Learning
@@ -30,76 +31,142 @@ export async function POST(request: NextRequest) {
     // Log when the API is called
     console.log('Generate report API called');
     
-    const { conversationUrl, reportType, format } = await request.json();
-    console.log('Request params:', { conversationUrl, reportType, format });
+    const { content, reportType = 'detailed', inputType } = await request.json();
+    console.log('Request params:', { content, reportType, inputType });
 
-    // Validate the conversation URL
-    if (!conversationUrl) {
-      console.error('Missing conversation URL');
+    // Validate the input
+    if (!content) {
+      console.error('Missing content');
       return NextResponse.json(
-        { error: "Conversation URL is required" },
+        { error: "Content is required" },
         { status: 400 }
       );
     }
 
-    // For example URLs and special known case, return sample report without calling OpenAI
-    const isExampleUrl = conversationUrl.includes('abc123-example');
-    const isSpecialUrl = conversationUrl.includes('67e62fd1-f1f0-800f-85a2-bfbcf76d434b');
+    // For example URLs and special known case, return custom report
+    const isExampleUrl = content.includes('abc123-example');
+    const isSpecialUrl = content.includes('67e62fd1-f1f0-800f-85a2-bfbcf76d434b');
     
     if (isExampleUrl || isSpecialUrl) {
-      console.log('Using example/special URL - returning sample report');
-      // Create a report title based on the URL type
-      let title = isSpecialUrl ? 'AI Reporter Development Report' : 'Machine Learning Overview';
+      console.log('Using example/special URL - generating custom report');
       
-      // Create a custom first line for the report
-      let customIntro = isSpecialUrl 
-        ? `# ${title}\n\nThis report summarizes the key aspects of the AI Reporter project, a tool designed to transform ChatGPT conversations into structured reports.\n\n`
-        : `# ${title}\n\n`;
-      
-      return NextResponse.json({ 
-        report: customIntro + SAMPLE_REPORT,
-        note: 'This is a sample report using mock data' 
+      // Create a proper conversation object for the AI Reporter project
+      const conversation: Conversation = {
+        id: "special-" + Date.now(),
+        title: "AI Reporter Project Documentation",
+        source: "special",
+        messages: [
+          {
+            role: "user",
+            content: `Project Name: AI Reporter
+            
+Description: AI Reporter is a web application that transforms content into structured, professional reports. The project aims to provide an easy way to convert various types of content (LLM conversations, scratch notes, and files) into well-formatted reports using different templates.
+
+Key Features:
+- Multiple input methods (LLM conversations, scratch notes, file uploads)
+- Smart template system with different report types
+- Modern UI with Next.js and Tailwind CSS
+- Export options (PDF, markdown, text)
+- Dark mode support
+
+Technical Stack:
+- Next.js 14 with App Router
+- TypeScript for type safety
+- Tailwind CSS for styling
+- shadcn/ui for components
+- OpenAI API integration
+- Modular template system
+
+Implementation Status:
+- Core functionality complete
+- Template system implemented
+- UI components in place
+- Export features partially complete
+- Deployment pending`
+          }
+        ]
+      };
+
+      // Generate a proper report using the template system
+      const report = await generateReport(conversation, {
+        type: reportType,
+        format: "markdown",
+        inputType: "scratch"
       });
+
+      return NextResponse.json({ report });
     }
+
+    let conversation: Conversation;
     
-    // Normal flow for real URLs
-    if (!validateConversationUrl(conversationUrl)) {
-      console.error('Invalid conversation URL format');
-      return NextResponse.json(
-        { error: "Invalid conversation URL. Must be a chat.openai.com or chatgpt.com URL" },
-        { status: 400 }
-      );
+    // Handle different input types
+    switch (inputType) {
+      case "llm":
+        // Validate and fetch conversation for LLM input
+        if (!validateConversationUrl(content)) {
+          console.error('Invalid conversation URL format');
+          return NextResponse.json(
+            { error: "Invalid conversation URL. Must be a chat.openai.com or chatgpt.com URL" },
+            { status: 400 }
+          );
+        }
+
+        try {
+          conversation = await fetchAndParseConversation(content);
+        } catch (fetchError) {
+          console.error('Error fetching conversation:', fetchError);
+          return NextResponse.json(
+            { error: `Failed to fetch conversation: ${fetchError instanceof Error ? fetchError.message : 'Unknown error'}` },
+            { status: 500 }
+          );
+        }
+        break;
+
+      case "scratch":
+        // Create a conversation object from scratch notes
+        conversation = {
+          id: "scratch-" + Date.now(),
+          title: "Scratch Notes",
+          source: "scratch",
+          messages: [
+            {
+              role: "user",
+              content: content
+            }
+          ]
+        };
+        break;
+
+      case "file":
+        // Create a conversation object from file content
+        conversation = {
+          id: "file-" + Date.now(),
+          title: "File Content",
+          source: "file",
+          messages: [
+            {
+              role: "user",
+              content: content
+            }
+          ]
+        };
+        break;
+
+      default:
+        return NextResponse.json(
+          { error: "Invalid input type" },
+          { status: 400 }
+        );
     }
 
-    // First fetch and parse the conversation
-    console.log('Fetching conversation from:', conversationUrl);
-    let conversation;
-    try {
-      conversation = await fetchAndParseConversation(conversationUrl);
-    } catch (fetchError) {
-      console.error('Error fetching conversation:', fetchError);
-      return NextResponse.json(
-        { error: `Failed to fetch conversation: ${fetchError instanceof Error ? fetchError.message : 'Unknown error'}` },
-        { status: 500 }
-      );
-    }
-
-    // Validate that we have messages
+    // Validate that we have content to process
     if (!conversation.messages || conversation.messages.length === 0) {
-      console.error('No messages found in conversation');
+      console.error('No content found to process');
       return NextResponse.json(
-        { error: "No messages found in conversation" },
+        { error: "No content found to process" },
         { status: 400 }
       );
     }
-
-    // Log the conversation for debugging
-    console.log('Conversation to generate report from:', {
-      id: conversation.id,
-      title: conversation.title,
-      messageCount: conversation.messages.length,
-      sampleMessage: conversation.messages[0]
-    });
 
     // Check that API key is valid
     const apiKeyValid = await validateApiKey();
@@ -111,12 +178,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Then generate the report
+    // Generate the report
     console.log('Generating report...');
     try {
       const report = await generateReport(conversation, {
-        type: reportType || "executive",
-        format: format || "markdown"
+        type: reportType,
+        format: "markdown",
+        inputType: inputType
       });
       return NextResponse.json({ report });
     } catch (genError) {

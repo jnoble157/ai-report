@@ -4,7 +4,7 @@ import { Check } from "lucide-react"
 
 export function Pricing() {
   return (
-    <section id="pricing" className="w-full py-12 md:py-24 lg:py-32 bg-muted/50">
+    <section id="pricing" className="w-full py-12 md:py-24 lg:py-32 bg-gradient-to-b from-muted/50 to-background">
       <div className="container px-4 md:px-6">
         <div className="flex flex-col items-center justify-center space-y-4 text-center">
           <div className="space-y-2">
@@ -16,7 +16,7 @@ export function Pricing() {
           </div>
         </div>
         <div className="mx-auto grid max-w-5xl grid-cols-1 gap-6 py-12 lg:grid-cols-3">
-          <div className="flex flex-col rounded-lg border bg-background p-6 shadow-sm">
+          <div className="flex flex-col rounded-xl border bg-background p-8 shadow-sm transition-all duration-200 hover:shadow-lg">
             <div className="space-y-2">
               <h3 className="text-2xl font-bold">Free</h3>
               <p className="text-muted-foreground">Perfect for trying out AI Report.</p>
@@ -25,7 +25,7 @@ export function Pricing() {
               $0
               <span className="ml-1 text-base font-normal text-muted-foreground">/month</span>
             </div>
-            <ul className="mt-6 space-y-3 text-sm text-muted-foreground">
+            <ul className="mt-8 mb-8 space-y-4 flex-grow text-sm text-muted-foreground">
               <li className="flex items-center">
                 <Check className="mr-2 h-4 w-4 text-primary" />
                 <span>3 reports per day</span>
@@ -39,11 +39,11 @@ export function Pricing() {
                 <span>PDF & text export</span>
               </li>
             </ul>
-            <Button asChild className="mt-6" variant="outline">
+            <Button asChild variant="outline" className="w-full">
               <Link href="/app">Get Started</Link>
             </Button>
           </div>
-          <div className="flex flex-col rounded-lg border bg-background p-6 shadow-sm ring-2 ring-primary">
+          <div className="flex flex-col rounded-xl border bg-background p-8 shadow-lg ring-2 ring-primary transition-all duration-200 hover:shadow-xl">
             <div className="space-y-2">
               <h3 className="text-2xl font-bold">Pro</h3>
               <p className="text-muted-foreground">For professionals and small teams.</p>
@@ -52,7 +52,7 @@ export function Pricing() {
               $19
               <span className="ml-1 text-base font-normal text-muted-foreground">/month</span>
             </div>
-            <ul className="mt-6 space-y-3 text-sm text-muted-foreground">
+            <ul className="mt-8 mb-8 space-y-4 flex-grow text-sm text-muted-foreground">
               <li className="flex items-center">
                 <Check className="mr-2 h-4 w-4 text-primary" />
                 <span>Unlimited reports</span>
@@ -74,11 +74,11 @@ export function Pricing() {
                 <span>Priority support</span>
               </li>
             </ul>
-            <Button asChild className="mt-6">
+            <Button asChild className="w-full">
               <Link href="/app">Get Started</Link>
             </Button>
           </div>
-          <div className="flex flex-col rounded-lg border bg-background p-6 shadow-sm">
+          <div className="flex flex-col rounded-xl border bg-background p-8 shadow-sm transition-all duration-200 hover:shadow-lg">
             <div className="space-y-2">
               <h3 className="text-2xl font-bold">Enterprise</h3>
               <p className="text-muted-foreground">For large teams and organizations.</p>
@@ -87,7 +87,7 @@ export function Pricing() {
               $49
               <span className="ml-1 text-base font-normal text-muted-foreground">/month</span>
             </div>
-            <ul className="mt-6 space-y-3 text-sm text-muted-foreground">
+            <ul className="mt-8 mb-8 space-y-4 flex-grow text-sm text-muted-foreground">
               <li className="flex items-center">
                 <Check className="mr-2 h-4 w-4 text-primary" />
                 <span>Everything in Pro</span>
@@ -109,7 +109,7 @@ export function Pricing() {
                 <span>Dedicated support</span>
               </li>
             </ul>
-            <Button asChild className="mt-6" variant="outline">
+            <Button asChild variant="outline" className="w-full">
               <Link href="/contact">Contact Sales</Link>
             </Button>
           </div>

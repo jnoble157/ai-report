@@ -1,18 +1,33 @@
 # AI Report
 
-AI Report is a web application that transforms GPT conversations into structured, professional reports. Simply paste a shared conversation URL, choose a report template, and get a well-formatted report in seconds.
+AI Report is a web application that transforms content into structured, professional reports. Whether you have a GPT conversation, scratch notes, or text files, you can quickly generate well-formatted reports with different templates.
 
 ## Features
 
-- **Conversation Parsing**: Extract content from shared GPT conversation links
-- **Multiple Report Templates**: Choose from executive summaries, detailed breakdowns, or actionable insights
-- **Export Options**: Download as PDF, markdown, or copy as text
+### Multiple Input Methods
+- **LLM Conversations**: Extract content from shared GPT conversation links
+- **Scratch Notes**: Convert your quick notes into structured reports
+- **File Upload**: Process content from .md, .txt, or .json files (up to 1MB)
+
+### Report Generation
+- **Smart Templates**: Choose from multiple professional templates:
+  - Executive Summary
+  - Detailed Analysis
+  - Meeting Notes
+  - Project Documentation
+  - Research Summary
+  - Product Specification
+- **Format Options**: Download as PDF, markdown, or copy as text
+- **Preview Support**: See template structure before generating
+
+### Modern Interface
 - **Clean UI**: Modern, responsive interface built with Next.js and Tailwind CSS
-- **Dark Mode Support**: Toggle between light and dark themes
+- **Dark Mode**: Toggle between light and dark themes
+- **Drag & Drop**: Easy file uploading with drag and drop support
 
 ## Important Usage Notes
 
-### Sharing ChatGPT Conversations
+### Using LLM Conversations
 
 For the app to access your ChatGPT conversations, they must be properly shared:
 
@@ -23,6 +38,13 @@ For the app to access your ChatGPT conversations, they must be properly shared:
 5. Copy and paste the entire URL into the app
 
 If your shared link returns a login page, the "Share with web" toggle was not enabled.
+
+### File Upload Guidelines
+
+When uploading files:
+- Supported formats: .md, .txt, .json
+- Maximum file size: 1MB
+- Files should contain text content for analysis
 
 ### API Key Configuration
 
@@ -112,9 +134,23 @@ make dev
 │   ├── ui/               # UI components from shadcn
 │   └── ...               # Feature components
 ├── lib/                   # Utility functions
+│   ├── templates/        # Report template system
+│   │   ├── formats/     # Format instructions
+│   │   ├── templates/   # Template definitions
+│   │   └── README.md    # Template docs
 ├── public/               # Static assets
 └── styles/               # Global styles
 ```
+
+### Template System
+
+The application uses a modular template system for report generation. Each template includes:
+- Professional format instructions
+- AI system prompts
+- Preview content
+- Styling metadata
+
+For information on creating or modifying templates, see [Template Documentation](lib/templates/README.md).
 
 ## Contributing
 

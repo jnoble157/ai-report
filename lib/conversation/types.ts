@@ -1,15 +1,15 @@
+export type ConversationSource = 'llm' | 'scratch' | 'file' | 'special';
+
 export interface Message {
-  role: 'user' | 'assistant' | 'system';
+  role: 'user' | 'assistant';
   content: string;
-  timestamp?: string;
 }
 
 export interface Conversation {
   id: string;
   title?: string;
+  source: ConversationSource;
   messages: Message[];
-  metadata?: Record<string, unknown>;
-  source: 'chatgpt' | 'claude' | 'gemini' | 'unknown';
 }
 
 export interface ConversationProvider {

@@ -1,19 +1,20 @@
 "use client"
 
-import type React from "react"
-
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { ReportOutput } from "./report-output"
-import { Loader2, AlertCircle, AlertTriangle } from "lucide-react"
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { Loader2, CheckCircle2, AlertCircle } from "lucide-react"
 import { ConversationService } from "@/lib/conversation/conversation-service"
 import { ConversationError } from "@/lib/conversation/types"
-import { ShareGuide } from "./share-guide"
+import { useRouter } from "next/navigation"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Textarea } from "@/components/ui/textarea"
+import { cn } from "@/lib/utils"
+import { templateManager } from "@/lib/templates"
+import ReactMarkdown from 'react-markdown'
 
 interface ConversationPreview {
   title: string
@@ -21,53 +22,85 @@ interface ConversationPreview {
   provider: string
 }
 
-// Using a constant for the example URL to keep it consistent
-const EXAMPLE_URL = "https://chat.openai.com/share/abc123-example-conversation";
+type InputType = "llm" | "scratch" | "file"
 
 export function ReportGenerator() {
+  const [inputType, setInputType] = useState<InputType>("llm")
   const [conversationUrl, setConversationUrl] = useState("")
+  const [scratchNotes, setScratchNotes] = useState("")
+  const [uploadedFile, setUploadedFile] = useState<File | null>(null)
+  const [fileContent, setFileContent] = useState("")
   const [reportType, setReportType] = useState("executive")
   const [isLoading, setIsLoading] = useState(false)
-  const [isFetchingPreview, setIsFetchingPreview] = useState(false)
-  const [report, setReport] = useState<string | null>(null)
-  const [error, setError] = useState<string | null>(null)
+  const [isValidating, setIsValidating] = useState(false)
+  const [errors, setErrors] = useState<Record<InputType, string | null>>({
+    llm: null,
+    scratch: null,
+    file: null
+  })
   const [conversationPreview, setConversationPreview] = useState<ConversationPreview | null>(null)
+  const router = useRouter()
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const conversationService = new ConversationService();
 
+  const ALLOWED_FILE_TYPES = {
+    '.md': 'text/markdown',
+    '.txt': 'text/plain',
+    '.json': 'application/json',
+  };
+
+  const MAX_FILE_SIZE = 1024 * 1024; // 1MB
+
+  const validateFile = (file: File) => {
+    // Check file size
+    if (file.size > MAX_FILE_SIZE) {
+      throw new Error("File size must be less than 1MB");
+    }
+
+    // Check file type
+    const fileExtension = '.' + file.name.split('.').pop()?.toLowerCase();
+    if (!fileExtension || !Object.keys(ALLOWED_FILE_TYPES).includes(fileExtension)) {
+      throw new Error("Only .md, .txt, and .json files are supported");
+    }
+
+    return true;
+  };
+
+  const handleFileUpload = async (file: File) => {
+    try {
+      validateFile(file);
+      setUploadedFile(file);
+      const text = await file.text();
+      setFileContent(text);
+      setErrors(prev => ({ ...prev, file: null }));
+    } catch (err) {
+      setErrors(prev => ({ ...prev, file: err instanceof Error ? err.message : "Failed to read file" }));
+      setUploadedFile(null);
+      setFileContent("");
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
+
   // Effect to set up error handling
   useEffect(() => {
-    // Add global error handler to log errors
     const errorHandler = (event: ErrorEvent) => {
       console.error('Global error:', event.error);
-      // Optional: Set error state here if needed
     };
-    
     window.addEventListener('error', errorHandler);
     return () => window.removeEventListener('error', errorHandler);
   }, []);
 
-  const fetchConversationPreview = async () => {
+  const validateConversationUrl = async () => {
     if (!conversationUrl.trim()) return
 
-    setIsFetchingPreview(true)
-    setError(null)
+    setIsValidating(true)
+    setErrors(prev => ({ ...prev, llm: null }))
     setConversationPreview(null)
 
     try {
-      // Special handling for example URL
-      if (conversationUrl.includes('abc123-example')) {
-        console.log('Example URL detected, using mock data');
-        setConversationPreview({
-          title: 'Example AI Conversation',
-          messageCount: 4,
-          provider: 'chatgpt'
-        });
-        setIsFetchingPreview(false);
-        return;
-      }
-      
-      // Validate the URL first
       const validation = conversationService.validateUrl(conversationUrl)
       if (!validation.isValid) {
         throw new ConversationError(validation.error || 'Invalid URL', 'INVALID_URL')
@@ -81,24 +114,43 @@ export function ReportGenerator() {
         provider: conversation.source
       })
     } catch (err) {
-      console.error("Error fetching preview:", err)
-      setError(
-        err instanceof Error ? `Error fetching conversation: ${err.message}` : "Failed to fetch conversation preview",
-      )
+      console.error("Error validating URL:", err)
+      setErrors(prev => ({ ...prev, llm: err instanceof Error ? err.message : "Invalid URL" }))
       setConversationPreview(null)
     } finally {
-      setIsFetchingPreview(false)
+      setIsValidating(false)
     }
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
-    setError(null)
+    setErrors({ llm: null, scratch: null, file: null })
 
     try {
-      if (!conversationUrl.trim()) {
-        throw new Error("Please enter a valid conversation URL")
+      let content = ""
+      
+      switch (inputType) {
+        case "llm":
+          if (!conversationUrl.trim()) {
+            throw new Error("Please enter a conversation URL")
+          }
+          content = conversationUrl
+          break
+        case "scratch":
+          if (!scratchNotes.trim()) {
+            setErrors(prev => ({ ...prev, scratch: "Please enter some notes" }))
+            throw new Error("Please enter some notes")
+          }
+          content = scratchNotes
+          break
+        case "file":
+          if (!fileContent) {
+            setErrors(prev => ({ ...prev, file: "Please upload a file" }))
+            throw new Error("Please upload a file")
+          }
+          content = fileContent
+          break
       }
 
       const response = await fetch("/api/generate-report", {
@@ -107,29 +159,31 @@ export function ReportGenerator() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          conversationUrl,
+          content,
           reportType,
+          inputType,
         }),
       })
 
       const data = await response.json()
 
       if (!response.ok) {
-        // Handle specific error cases with clear guidance
         if (data.error && data.error.includes('login page')) {
-          throw new Error("This conversation requires login. Make sure you've shared it with 'Share with web' enabled in ChatGPT.")
+          throw new Error("Login required")
         } else if (data.error && data.error.includes('conversation not found')) {
-          throw new Error("Conversation not found. The URL might be incorrect or the conversation was deleted.")
+          throw new Error("Not found")
         } else {
-          throw new Error(data.error || "Failed to generate report")
+          throw new Error("Generation failed")
         }
       }
 
-      setReport(data.report)
+      router.push(`/report?report=${encodeURIComponent(data.report)}&type=${reportType}`)
     } catch (err) {
       console.error("Report generation error:", err)
-      setError(err instanceof Error ? err.message : "An unknown error occurred")
-      setReport(null)
+      setErrors(prev => ({
+        ...prev,
+        [inputType]: err instanceof Error ? err.message : "Unknown error"
+      }))
     } finally {
       setIsLoading(false)
     }
@@ -139,96 +193,183 @@ export function ReportGenerator() {
     <div className="space-y-8">
       <Card>
         <CardContent className="pt-6">
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <div className="space-y-2">
-              <Label htmlFor="conversation-url">Conversation URL</Label>
-              <div className="flex gap-2">
-                <Input
-                  id="conversation-url"
-                  placeholder="https://chat.openai.com/share/..."
-                  value={conversationUrl}
-                  onChange={(e) => {
-                    setConversationUrl(e.target.value)
-                    setConversationPreview(null)
-                  }}
-                  onBlur={fetchConversationPreview}
-                  required
-                  className="flex-1"
-                />
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={fetchConversationPreview}
-                  disabled={isFetchingPreview || !conversationUrl.trim()}
-                >
-                  {isFetchingPreview ? <Loader2 className="h-4 w-4 animate-spin" /> : "Preview"}
-                </Button>
-              </div>
-              <div className="flex gap-2 mt-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    setConversationUrl(EXAMPLE_URL)
-                    fetchConversationPreview()
-                  }}
-                  className="text-xs"
-                >
-                  Use Example URL (for testing)
-                </Button>
-              </div>
-              <div className="space-y-2">
-                <p className="text-sm text-muted-foreground">
-                  Paste the URL of your shared GPT conversation from chat.openai.com
-                </p>
-                <div className="flex justify-between items-center">
-                  <div className="text-sm space-y-1 text-muted-foreground">
-                    <p className="font-medium">URL Format:</p>
-                    <p className="font-mono text-xs bg-muted p-1 rounded">
-                      https://chat.openai.com/share/[conversation-id]
-                    </p>
-                  </div>
-                  <ShareGuide />
-                </div>
-              </div>
+          <form onSubmit={handleSubmit} className="space-y-8">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              {/* Left Column - Input Selection and Content */}
+              <div className="space-y-8">
+                <Tabs value={inputType} onValueChange={(value) => setInputType(value as InputType)} className="w-full">
+                  <TabsList className="grid w-full grid-cols-3 mb-6">
+                    <TabsTrigger value="llm">LLM Conversation</TabsTrigger>
+                    <TabsTrigger value="scratch">Scratch Notes</TabsTrigger>
+                    <TabsTrigger value="file">Upload File</TabsTrigger>
+                  </TabsList>
 
-              {conversationPreview && (
-                <div className="mt-2 p-3 rounded-md bg-muted">
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <p className="font-medium">{conversationPreview.title}</p>
-                      <p className="text-sm text-muted-foreground">
-                        {conversationPreview.messageCount} messages found
-                      </p>
+                  <TabsContent value="llm" className="mt-0">
+                    <div className="space-y-4">
+                      <Label htmlFor="conversation-url">Conversation URL</Label>
+                      <Input
+                        id="conversation-url"
+                        placeholder="https://chat.openai.com/share/..."
+                        value={conversationUrl}
+                        onChange={(e) => {
+                          setConversationUrl(e.target.value)
+                          setConversationPreview(null)
+                        }}
+                        onBlur={validateConversationUrl}
+                        required
+                        className="h-12"
+                      />
+                      <div className="flex items-center gap-2 text-sm">
+                        {isValidating && (
+                          <div className="flex items-center gap-2 text-muted-foreground">
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                            <span>Validating...</span>
+                          </div>
+                        )}
+                        {conversationPreview && (
+                          <div className="flex items-center gap-2 text-green-500">
+                            <CheckCircle2 className="h-4 w-4" />
+                            <span>Valid conversation URL</span>
+                          </div>
+                        )}
+                        {errors.llm && (
+                          <div className="flex items-center gap-2 text-destructive">
+                            <AlertCircle className="h-4 w-4" />
+                            <span>{errors.llm}</span>
+                          </div>
+                        )}
+                      </div>
+                      {conversationPreview && (
+                        <p className="text-sm text-muted-foreground">
+                          {conversationPreview.title} • {conversationPreview.messageCount} messages • {conversationPreview.provider}
+                        </p>
+                      )}
                     </div>
-                    <span className="text-xs px-2 py-1 rounded-full bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300">
-                      {conversationPreview.provider}
-                    </span>
-                  </div>
+                  </TabsContent>
+
+                  <TabsContent value="scratch" className="mt-0">
+                    <div className="space-y-4">
+                      <Label htmlFor="scratch-notes">Your Notes</Label>
+                      <Textarea
+                        id="scratch-notes"
+                        placeholder="Paste or type your notes here..."
+                        value={scratchNotes}
+                        onChange={(e) => setScratchNotes(e.target.value)}
+                        className="min-h-[300px] resize-none"
+                        required
+                      />
+                      {errors.scratch && (
+                        <p className="text-sm text-destructive mt-2">
+                          {errors.scratch}
+                        </p>
+                      )}
+                    </div>
+                  </TabsContent>
+
+                  <TabsContent value="file" className="mt-0">
+                    <div className="space-y-4">
+                      <Label>Upload File</Label>
+                      <div 
+                        className={cn(
+                          "border-2 border-dashed rounded-lg p-8 text-center min-h-[300px] flex flex-col items-center justify-center cursor-pointer hover:border-primary/50 transition-colors",
+                          errors.file && "border-destructive border-2",
+                          uploadedFile && "border-green-500/50"
+                        )}
+                        onClick={() => fileInputRef.current?.click()}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          const file = e.dataTransfer.files[0];
+                          if (file) handleFileUpload(file);
+                        }}
+                        onDragOver={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                        }}
+                      >
+                        {uploadedFile ? (
+                          <>
+                            <p className="font-medium">{uploadedFile.name}</p>
+                            <p className="text-sm text-muted-foreground mt-1">
+                              {(uploadedFile.size / 1024).toFixed(1)}KB • Click to upload a different file
+                            </p>
+                          </>
+                        ) : (
+                          <>
+                            <p className="text-muted-foreground">
+                              Click to upload or drag and drop
+                            </p>
+                            <p className="text-sm text-muted-foreground mt-1">
+                              Supports: .md, .txt, .json files (max 1MB)
+                            </p>
+                          </>
+                        )}
+                      </div>
+                      <input
+                        type="file"
+                        ref={fileInputRef}
+                        className="hidden"
+                        accept=".txt,.md,.json"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) handleFileUpload(file);
+                        }}
+                      />
+                      {errors.file && (
+                        <p className="text-sm text-destructive mt-2">
+                          {errors.file}
+                        </p>
+                      )}
+                    </div>
+                  </TabsContent>
+                </Tabs>
+              </div>
+
+              {/* Right Column - Template Selection and Preview */}
+              <div className="space-y-8">
+                <div className="space-y-4">
+                  <Label htmlFor="report-type">Report Template</Label>
+                  <Select value={reportType} onValueChange={setReportType}>
+                    <SelectTrigger id="report-type" className="h-12">
+                      <SelectValue placeholder="Select a template" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="executive">Executive Summary</SelectItem>
+                      <SelectItem value="detailed">Detailed Analysis</SelectItem>
+                      <SelectItem value="meeting">Meeting Notes</SelectItem>
+                      <SelectItem value="project">Project Documentation</SelectItem>
+                      <SelectItem value="research">Research Summary</SelectItem>
+                      <SelectItem value="product">Product Specification</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
-              )}
+
+                <div className="space-y-4">
+                  <Label>Template Preview</Label>
+                  <Card className="max-h-[400px] overflow-hidden">
+                    <CardContent className="pt-6 overflow-y-auto max-h-[400px] custom-scrollbar">
+                      <div className="prose prose-sm dark:prose-invert max-w-none">
+                        {templateManager.getTemplate(reportType)?.metadata?.previewContent ? (
+                          <ReactMarkdown>
+                            {templateManager.getTemplate(reportType)?.metadata?.previewContent || ''}
+                          </ReactMarkdown>
+                        ) : (
+                          <>
+                            <h2>Sample Report</h2>
+                            <p>Template preview not available.</p>
+                          </>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+              </div>
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="report-type">Report Type</Label>
-              <Select value={reportType} onValueChange={setReportType}>
-                <SelectTrigger id="report-type">
-                  <SelectValue placeholder="Select a report type" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="executive">Executive Summary</SelectItem>
-                  <SelectItem value="detailed">Detailed Breakdown</SelectItem>
-                  <SelectItem value="actionable">Actionable Insights</SelectItem>
-                </SelectContent>
-              </Select>
-              <p className="text-sm text-muted-foreground">Choose the type of report you want to generate</p>
-            </div>
-
-            <Button type="submit" className="w-full" disabled={isLoading || isFetchingPreview}>
+            {/* Generate Report Button - Full Width at Bottom */}
+            <Button type="submit" className="w-full h-12 text-lg" disabled={isLoading}>
               {isLoading ? (
                 <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  <Loader2 className="mr-2 h-5 w-5 animate-spin" />
                   Generating Report...
                 </>
               ) : (
@@ -238,68 +379,6 @@ export function ReportGenerator() {
           </form>
         </CardContent>
       </Card>
-
-      {error && (
-        <Alert variant="destructive">
-          <AlertCircle className="h-4 w-4" />
-          <AlertTitle>Error</AlertTitle>
-          <AlertDescription className="space-y-2">
-            <p>{error}</p>
-            <div className="mt-4 p-3 bg-red-50 dark:bg-red-950 rounded-md">
-              <div className="flex items-start gap-2 mb-3">
-                <AlertTriangle className="h-5 w-5 flex-shrink-0 text-red-500" />
-                <div className="font-medium text-red-700 dark:text-red-300">
-                  {error && error.includes('login page') ? (
-                    <span className="text-sm">
-                      Your conversation requires login. The &ldquo;Share with web&rdquo; toggle is not enabled.
-                    </span>
-                  ) : (
-                    <span className="text-sm">Failed to generate report from this conversation</span>
-                  )}
-                </div>
-              </div>
-              
-              <p className="font-medium text-sm">How to Share a Conversation Properly:</p>
-              <ol className="mt-2 text-sm list-decimal list-inside space-y-2">
-                <li>Open your conversation in ChatGPT</li>
-                <li>Click the "Share" button at the top (square with arrow icon)</li>
-                <li className="font-medium text-red-600 dark:text-red-400">Important: Toggle "Share with web" to ON</li>
-                <li>Click "Create shared link"</li>
-                <li>Copy and paste the entire URL here</li>
-              </ol>
-              
-              <div className="mt-4 p-2 bg-white dark:bg-gray-800 rounded border border-red-200 dark:border-red-800">
-                <div className="flex items-center">
-                  <div className="w-10 h-5 bg-green-500 rounded-full relative mr-2">
-                    <div className="w-4 h-4 bg-white rounded-full absolute right-1 top-0.5" />
-                  </div>
-                  <span className="text-sm font-medium">Share with web</span>
-                </div>
-                <p className="text-xs mt-2">This toggle MUST be ON (green) for AI Report to access your conversation</p>
-              </div>
-              
-              <div className="mt-3 text-xs">
-                <p className="font-medium">Common Issues:</p>
-                <ul className="list-disc list-inside mt-1 space-y-1">
-                  <li>"Share with web" toggle not enabled</li>
-                  <li>Using a conversation URL from your chat history (not a shared link)</li>
-                  <li>Using a link that requires login credentials</li>
-                  <li>Using a conversation that was deleted or expired</li>
-                </ul>
-              </div>
-              
-              <div className="mt-4 pt-3 border-t border-red-200 dark:border-red-800">
-                <p className="text-xs">
-                  For this specific URL <span className="font-mono text-xs">{conversationUrl.includes('67e62fd1') ? conversationUrl : ''}</span>, 
-                  we've added special handling. Try clicking the Generate Report button again.
-                </p>
-              </div>
-            </div>
-          </AlertDescription>
-        </Alert>
-      )}
-
-      {report && <ReportOutput report={report} reportType={reportType} />}
     </div>
   )
 }
