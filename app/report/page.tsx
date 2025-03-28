@@ -1,11 +1,11 @@
-'use client';
+"use client";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import Link from "next/link";
 import ReactMarkdown from "react-markdown";
 import { useSearchParams } from "next/navigation";
-import { useState } from "react";
+import { useState, Suspense } from "react";
 import { Loader2, Check, Copy, FileDown, FileText, Printer } from "lucide-react";
 import { 
   Tooltip,
@@ -14,7 +14,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 
-export default function ReportPage() {
+function ReportContent() {
   const searchParams = useSearchParams();
   const report = searchParams.get('report');
   const type = searchParams.get('type');
@@ -150,5 +150,13 @@ export default function ReportPage() {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+export default function ReportPage() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <ReportContent />
+    </Suspense>
   );
 } 
