@@ -4,6 +4,30 @@ import { fetchAndParseConversation, validateConversationUrl } from "@/lib/conver
 import { type Conversation } from "@/lib/conversation/types";
 import { templateManager } from "@/lib/templates";
 
+// Debug function to safely log content samples
+function debugContent(content: any, label: string = "Content") {
+  if (typeof content !== 'string') {
+    console.log(`${label}: Not a string - ${typeof content}`);
+    return;
+  }
+  
+  // Get first 100 chars and last 100 chars to avoid logging entire content
+  const start = content.substring(0, 100);
+  const end = content.length > 200 ? content.substring(content.length - 100) : '';
+  const length = content.length;
+  
+  console.log(`${label}: length=${length}, start="${start}"${end ? `, end="${end}"` : ''}`);
+  
+  // Log special characters that could cause issues
+  const specialChars = (content.match(/[^\w\s.,!?()[\]{}:;"'<>/-]/g) || [])
+    .filter((char, index, self) => self.indexOf(char) === index)
+    .join('');
+  
+  if (specialChars.length > 0) {
+    console.log(`${label} contains special chars: ${specialChars}`);
+  }
+}
+
 // Sample report for testing without API calls
 const SAMPLE_REPORT = `# Executive Summary: AI and Machine Learning
 
@@ -32,7 +56,10 @@ export async function POST(request: NextRequest) {
     console.log('Generate report API called');
     
     const { content, reportType = 'detailed', inputType } = await request.json();
-    console.log('Request params:', { content, reportType, inputType });
+    console.log('Request params:', { reportType, inputType });
+    
+    // Add debug logging for content
+    debugContent(content, `${inputType} content`);
 
     // Validate the input
     if (!content) {
@@ -124,6 +151,32 @@ Implementation Status:
 
       case "scratch":
         // Create a conversation object from scratch notes
+        // Ensure content is a string and perform basic validation only
+        if (typeof content !== 'string') {
+          return NextResponse.json(
+            { error: "Scratch notes must be text content" },
+            { status: 400 }
+          );
+        }
+        
+        // No pattern validation, accept any text content
+        // Special handling for markdown content to preserve formatting
+        let scratchProcessedContent = content;
+        
+        // If content appears to be markdown (contains markdown syntax like headings, code blocks)
+        // we'll wrap it to ensure proper processing
+        if (
+          content.includes('```') || 
+          content.includes('# ') || 
+          content.includes('## ') ||
+          content.includes('*') ||
+          content.includes('- ') ||
+          content.includes('1. ')
+        ) {
+          console.log('Detected markdown content in scratch notes, preserving formatting');
+          // No specific processing needed, but we could add special handling here if needed
+        }
+        
         conversation = {
           id: "scratch-" + Date.now(),
           title: "Scratch Notes",
@@ -131,7 +184,7 @@ Implementation Status:
           messages: [
             {
               role: "user",
-              content: content
+              content: scratchProcessedContent
             }
           ]
         };
@@ -139,6 +192,38 @@ Implementation Status:
 
       case "file":
         // Create a conversation object from file content
+        // Basic validation for file content
+        if (typeof content !== 'string') {
+          console.error('File content is not a string:', typeof content);
+          return NextResponse.json(
+            { error: "Invalid file content format" },
+            { status: 400 }
+          );
+        }
+        
+        if (!content.trim()) {
+          console.error('Empty file content received');
+          return NextResponse.json(
+            { error: "File content is empty" },
+            { status: 400 }
+          );
+        }
+        
+        // Special handling for markdown files
+        let fileProcessedContent = content;
+        if (
+          content.includes('```') || 
+          content.includes('# ') || 
+          content.includes('## ') ||
+          content.includes('*') ||
+          content.includes('- ') ||
+          content.includes('1. ')
+        ) {
+          console.log('Detected markdown content in file, preserving formatting');
+        }
+        
+        debugContent(fileProcessedContent, 'Processed file content');
+        
         conversation = {
           id: "file-" + Date.now(),
           title: "File Content",
@@ -146,7 +231,7 @@ Implementation Status:
           messages: [
             {
               role: "user",
-              content: content
+              content: fileProcessedContent
             }
           ]
         };

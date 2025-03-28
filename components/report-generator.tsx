@@ -16,6 +16,13 @@ import { cn } from "@/lib/utils"
 import { templateManager } from "@/lib/templates"
 import ReactMarkdown from 'react-markdown'
 
+// Add custom event type definition
+declare global {
+  interface WindowEventMap {
+    resetGeneratorState: CustomEvent;
+  }
+}
+
 interface ConversationPreview {
   title: string
   messageCount: number
@@ -70,10 +77,30 @@ export function ReportGenerator() {
   const handleFileUpload = async (file: File) => {
     try {
       validateFile(file);
-      setUploadedFile(file);
-      const text = await file.text();
-      setFileContent(text);
+      
+      // First clear any old file state and errors
+      setFileContent("");
+      setUploadedFile(null);
       setErrors(prev => ({ ...prev, file: null }));
+      
+      // Get the file content safely
+      try {
+        const text = await file.text();
+        if (!text || !text.trim()) {
+          throw new Error("File appears to be empty");
+        }
+        
+        // Log file details for debugging
+        console.log(`Uploaded file: ${file.name}, size: ${file.size}B, type: ${file.type}`);
+        console.log(`Content length: ${text.length} characters`);
+        
+        // Set the new file state
+        setFileContent(text);
+        setUploadedFile(file);
+      } catch (readError) {
+        console.error("Error reading file:", readError);
+        throw new Error("Failed to read file content");
+      }
     } catch (err) {
       setErrors(prev => ({ ...prev, file: err instanceof Error ? err.message : "Failed to read file" }));
       setUploadedFile(null);
@@ -84,13 +111,53 @@ export function ReportGenerator() {
     }
   };
 
-  // Effect to set up error handling
+  // Effect to set up error handling and state reset listener
   useEffect(() => {
     const errorHandler = (event: ErrorEvent) => {
       console.error('Global error:', event.error);
     };
+    
+    // Add listener for state reset event from report page
+    const resetStateHandler = () => {
+      console.log('Resetting generator state');
+      
+      // First set loading to true during reset to prevent any interactions
+      setIsLoading(true);
+      
+      // Force a small delay to ensure clean state transitions
+      setTimeout(() => {
+        // Reset all form state
+        setConversationUrl('');
+        setScratchNotes('');
+        setUploadedFile(null);
+        setFileContent('');
+        setReportType('executive');
+        setConversationPreview(null);
+        setErrors({ llm: null, scratch: null, file: null });
+        setIsValidating(false);
+        
+        // Reset file input if it exists
+        if (fileInputRef.current) {
+          fileInputRef.current.value = '';
+        }
+        
+        // Finally allow interaction again
+        setIsLoading(false);
+        
+        // Set input type to llm as default after reset
+        setInputType('llm');
+        
+        console.log('Generator state reset complete');
+      }, 100);
+    };
+    
     window.addEventListener('error', errorHandler);
-    return () => window.removeEventListener('error', errorHandler);
+    window.addEventListener('resetGeneratorState', resetStateHandler);
+    
+    return () => {
+      window.removeEventListener('error', errorHandler);
+      window.removeEventListener('resetGeneratorState', resetStateHandler);
+    };
   }, []);
 
   const validateConversationUrl = async () => {
@@ -149,10 +216,27 @@ export function ReportGenerator() {
             setErrors(prev => ({ ...prev, file: "Please upload a file" }))
             throw new Error("Please upload a file")
           }
-          content = fileContent
+          
+          // Ensure file content is properly handled as a string
+          if (typeof fileContent !== 'string') {
+            console.error("File content is not a string:", typeof fileContent)
+            throw new Error("Invalid file content")
+          }
+          
+          // Clean up any potential issues with the file content
+          content = fileContent.toString().trim()
+          
+          if (content.length === 0) {
+            setErrors(prev => ({ ...prev, file: "File content is empty" }))
+            throw new Error("File content is empty")
+          }
+          
+          console.log(`File content length: ${content.length} chars`)
           break
       }
 
+      console.log(`Submitting report generation request with ${inputType} input`)
+      
       const response = await fetch("/api/generate-report", {
         method: "POST",
         headers: {
@@ -168,12 +252,13 @@ export function ReportGenerator() {
       const data = await response.json()
 
       if (!response.ok) {
+        console.error("API response error:", data)
         if (data.error && data.error.includes('login page')) {
           throw new Error("Login required")
         } else if (data.error && data.error.includes('conversation not found')) {
           throw new Error("Not found")
         } else {
-          throw new Error("Generation failed")
+          throw new Error(data.error || "Generation failed")
         }
       }
 

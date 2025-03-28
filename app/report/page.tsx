@@ -4,8 +4,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import Link from "next/link";
 import ReactMarkdown from "react-markdown";
-import { useSearchParams } from "next/navigation";
-import { useState, Suspense } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
+import { useState, useEffect, Suspense } from "react";
 import { Loader2, Check, Copy, FileDown, FileText, Printer } from "lucide-react";
 import { 
   Tooltip,
@@ -16,10 +16,23 @@ import {
 
 function ReportContent() {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const report = searchParams.get('report');
   const type = searchParams.get('type');
   const [copied, setCopied] = useState(false);
   const [downloading, setDownloading] = useState(false);
+
+  // Function to handle returning to generator with clean state
+  const handleBackToGenerator = () => {
+    // Navigate to the generator page - corrected path
+    router.push('/app');
+    
+    // We add this event to allow components to reset their state
+    // This will be picked up by the ReportGenerator component
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('resetGeneratorState'));
+    }
+  };
 
   const handleCopy = async () => {
     if (!report) return;
@@ -79,7 +92,7 @@ function ReportContent() {
               <p className="text-center text-muted-foreground">
                 {!report ? "No report content available." : "The provided content is too short to generate a meaningful report. Please provide more detailed content."}
               </p>
-              <Button asChild>
+              <Button asChild onClick={handleBackToGenerator}>
                 <Link href="/app">Back to Generator</Link>
               </Button>
             </div>
@@ -92,9 +105,7 @@ function ReportContent() {
   return (
     <div className="container max-w-4xl mx-auto p-6">
       <div className="flex justify-between items-center mb-6">
-        <Button asChild variant="outline">
-          <Link href="/app">Back to Generator</Link>
-        </Button>
+        <Button variant="outline" onClick={handleBackToGenerator}>Back to Generator</Button>
         <TooltipProvider>
           <div className="flex gap-2">
             <Tooltip>
