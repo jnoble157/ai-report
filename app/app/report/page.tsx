@@ -5,8 +5,9 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { ArrowLeft } from "lucide-react"
 import ReactMarkdown from "react-markdown"
+import { Suspense } from "react"
 
-export default function ReportPage() {
+function ReportContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   
@@ -59,5 +60,13 @@ export default function ReportPage() {
         </CardContent>
       </Card>
     </div>
+  )
+}
+
+export default function ReportPage() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <ReportContent />
+    </Suspense>
   )
 } 
